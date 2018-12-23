@@ -18,17 +18,9 @@ class MCP23017:
     GPIOA  = 0x12 # Register for inputs A
     GPIOB  = 0x13 # Register for inputs B
 
-    def __init__(self, device_address, reset_pin):
+    def __init__(self, device_address):
         self._device = 0x20 + device_address # Device address (A0-A2)
         self._bus = smbus.SMBus(1) # Rev 2 Pi uses 1
-
-        # reset device
-        self.reset_pin = reset_pin
-        GPIO.setmode(GPIO.BCM) # set GPIO numbering
-        GPIO.setup(self.reset_pin, GPIO.OUT)
-        GPIO.output(self.reset_pin, GPIO.LOW)
-        time.sleep(0.1)
-        GPIO.output(self.reset_pin, GPIO.HIGH)
 
         # Set all pins as inputs
         self._bus.write_byte_data(self._device,self.IODIRA,0xFF)
@@ -69,7 +61,12 @@ def test_callback(channel, device):
     print(device.readAll())
 
 if __name__ == '__main__':
-    mcp = MCP23017(0,27)
+    GPIO.setmode(GPIO.BCM) # set GPIO numbering
+    GPIO.setup(27, GPIO.OUT)
+    GPIO.output(17, GPIO.LOW) # reset device
+    time.sleep(0.1)
+    GPIO.output(17, GPIO.HIGH)
+    mcp = MCP23017(1)
     mcp.registerInterruptCallback(test_callback,17)
 
     while True:
