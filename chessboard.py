@@ -5,6 +5,10 @@ from mcp23017 import MCP23017
 
 class Chessboard:
 
+    # constants
+    LED_ON = 0
+    LED_OFF = 1
+
     def __init__(self):
         # Pin definition
         self._reset_pin = 27
@@ -17,12 +21,9 @@ class Chessboard:
         GPIO.setmode(GPIO.BCM) # set GPIO numbering
         GPIO.setup(self._reset_pin, GPIO.OUT)
         GPIO.setup(self._interrupt_pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-        GPIO.setup(self._led_green, GPIO.OUT)
-        GPIO.setup(self._led_yellow, GPIO.OUT)
-        GPIO.setup(self._led_red, GPIO.OUT)
-        GPIO.output(self._led_red, GPIO.HIGH)
-        GPIO.output(self._led_yellow, GPIO.HIGH)
-        GPIO.output(self._led_green, GPIO.HIGH)
+        self.setStatusLed(self._led_green,self.LED_OFF)
+        self.setStatusLed(self._led_yellow,self.LED_OFF)
+        self.setStatusLed(self._led_red,self.LED_ON)
 
         # MCP
         GPIO.output(self._reset_pin, GPIO.LOW) # reset all devices
@@ -39,12 +40,18 @@ class Chessboard:
         self._board_initialized = False # board has not yet been initialized
         self.readPositions() # clear interrupt
 
+    def __del__(self):
+        GPIO.cleanup()
+
     def _initBoard(self):
         self._two_pieces_active = False
         self._last_action = "SET"
         self._last_active = ""
         self._board_initialized = True
         self.board = chess.Board()
+        self.setStatusLed(self._led_green,self.LED_ON)
+        self.setStatusLed(self._led_yellow,self.LED_OFF)
+        self.setStatusLed(self._led_red,self.LED_OFF)
 
     def _onInterruptEvent(self, channel):
         # read new positions
@@ -63,6 +70,7 @@ class Chessboard:
                             action = "SET"
                         else:
                             action = "MOVING"
+                            self.setStatusLed(self._led_yellow,self.LED_ON)
                         # find move
                         if action == "MOVING":
                             if self._last_action == "MOVING":
@@ -75,8 +83,9 @@ class Chessboard:
                             move = self._last_active+active_field
                             self._last_active = ""
                             print("Simple move:",move)
-                            self.board.push(chess.Move.from_uci(move)) # update board
+                            self.board.push(chess.Move.from_uci(move)) # update board 
                             print(self.board)
+                            self.setStatusLed(self._led_yellow,self.LED_OFF)
                         elif (action == "SET" and self._two_pieces_active):
                             print("Complex move:")
                             self._last_active = ""
@@ -84,6 +93,13 @@ class Chessboard:
 
         # store position
         self._positions = new_pos
+
+    def setStatusLed(self,led,state):
+        if state == self.LED_ON:
+            GPIO.setup(led, GPIO.OUT)
+            GPIO.output(led,self.LED_ON)
+        else:
+            GPIO.setup(led, GPIO.IN) # set pin to high impedance (to be sure that LED is turned off when cathode at 5V)
 
     def getLastPositions(self):
         return self._positions

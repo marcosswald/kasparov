@@ -38,7 +38,9 @@ class MCP23017:
         self._bus.write_byte_data(self._device,self.GPINTENB,0xFF)
         self._bus.write_byte_data(self._device,self.INTCONA,0x00)
         self._bus.write_byte_data(self._device,self.INTCONB,0x00)
-
+    
+    def __del__(self):
+        GPIO.cleanup()
 
     def _readGPA(self):
         return self._bus.read_byte_data(self._device,self.GPIOA)
