@@ -8,6 +8,8 @@ class Chessboard:
     # constants
     LED_ON = 0
     LED_OFF = 1
+    ACTION_SET = 0
+    ACTION_REMOVE = 1
 
     def __init__(self):
         # Pin definition
@@ -44,9 +46,8 @@ class Chessboard:
         GPIO.cleanup()
 
     def _initBoard(self):
-        self._two_pieces_active = False
-        self._last_action = "SET"
-        self._last_active = ""
+        self._last_action = self.ACTION_SET
+        self._pieces = None
         self._board_initialized = True
         self.board = chess.Board()
         self.setStatusLed(self._led_green,self.LED_ON)
@@ -60,35 +61,35 @@ class Chessboard:
         # get the move but only if board has been initialized
         if self._board_initialized:
             # find active field
-            rows = ['1','2','3','4','5','6','7','8']
-            cols = ['a','b','c','d','e','f','g','h']
-            for i,r in enumerate(rows):
-                for j,c in enumerate(cols):
+            for i,r in enumerate(chess.RANK_NAMES):
+                for j,c in enumerate(chess.FILE_NAMES):
                     if new_pos[i][j] != self._positions[i][j]:
-                        active_field = c+r
+                        square = chess.square(j,i)
                         if new_pos[i][j] == 0:
-                            action = "SET"
+                            action = self.ACTION_SET
                         else:
-                            action = "MOVING"
+                            action = self.ACTION_REMOVE
                             self.setStatusLed(self._led_yellow,self.LED_ON)
                         # find move
-                        if action == "MOVING":
-                            if self._last_action == "MOVING":
-                                self._two_pieces_active = True
-                                self._last_active = [active_field, self._last_active]
+                        if action == self.ACTION_REMOVE: # remove action
+                            piece = self.board.remove_piece_at(square) # remove the piece
+                            if self._last_action == self.ACTION_REMOVE:
+                                self._pieces = [piece, self._pieces]
                             else:
-                                self._two_pieces_active = False
-                                self._last_active = active_field  
-                        elif (action == "SET" and not (self._two_pieces_active)):
-                            move = self._last_active+active_field
-                            self._last_active = ""
-                            print("Simple move:",move)
-                            self.board.push(chess.Move.from_uci(move)) # update board 
-                            print(self.board)
-                            self.setStatusLed(self._led_yellow,self.LED_OFF)
-                        elif (action == "SET" and self._two_pieces_active):
-                            print("Complex move:")
-                            self._last_active = ""
+                                self._pieces = piece  
+                        elif action == self.ACTION_SET: # set action
+                            if (type(self._pieces) is not list): # simple move
+                                print("Simple move")
+                                self.board.set_piece_at(square,self._pieces)
+                                print(self.board)
+                                self.setStatusLed(self._led_yellow,self.LED_OFF)
+                            elif (type(self._pieces) is list and len(self._pieces) == 2): # capture move
+                                print("Capture move")
+                            else:
+                                print("Error: Lost synchronization!")
+                                self.setStatusLed(self._led_green,self.LED_OFF)
+                                self.setStatusLed(self._led_red,self.LED_ON)
+                            
                         self._last_action = action
 
         # store position
