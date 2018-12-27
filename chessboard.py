@@ -48,6 +48,7 @@ class Chessboard:
     def _initBoard(self):
         self._last_action = self.ACTION_SET
         self._pieces = None
+        self._squares = None
         self._board_initialized = True
         self.board = chess.Board()
         self.setStatusLed(self._led_green,self.LED_ON)
@@ -75,16 +76,28 @@ class Chessboard:
                             piece = self.board.remove_piece_at(square) # remove the piece
                             if self._last_action == self.ACTION_REMOVE:
                                 self._pieces = [piece, self._pieces]
+                                self._squares = [square, self._squares]
                             else:
-                                self._pieces = piece  
+                                self._pieces = piece
+                                self._squares = square  
                         elif action == self.ACTION_SET: # set action
                             if (type(self._pieces) is not list): # simple move
-                                print("Simple move")
+                                print("Simple move: " + self._pieces.symbol() + " from " + chess.SQUARE_NAMES[self._squares] + " to " + chess.SQUARE_NAMES[square])
                                 self.board.set_piece_at(square,self._pieces)
                                 print(self.board)
                                 self.setStatusLed(self._led_yellow,self.LED_OFF)
                             elif (type(self._pieces) is list and len(self._pieces) == 2): # capture move
-                                print("Capture move")
+                                # we assume that the captured piece was at the active square
+                                cap_square_id = self._squares.index(square) # get the index of the active square from last squares
+                                captured_piece = self._pieces[cap_square_id].symbol()
+                                del self._pieces[cap_square_id] # remove the captured piece
+                                del self._squares[cap_square_id] # remove the capture square from last squares
+                                survivor = self._pieces[0] # the remaining piece is the survivor
+                                from_square = self._squares[0] # the remaining square is the place where the survivor started from
+                                self.board.set_piece_at(square, survivor) # now set the piece
+                                print("Capture move: " + survivor.symbol() + " from " + chess.SQUARE_NAMES[from_square] + " to " + chess.SQUARE_NAMES[square] + " (" + captured_piece + " captured)")
+                                print(self.board)
+                                self.setStatusLed(self._led_yellow,self.LED_OFF)
                             else:
                                 print("Error: Lost synchronization!")
                                 self.setStatusLed(self._led_green,self.LED_OFF)
