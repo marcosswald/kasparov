@@ -47,7 +47,7 @@ class Chessboard:
         self.readPositions() # clear interrupt
 
     def __del__(self):
-        self._engine.terminate()
+        self._engine.quit()
         GPIO.cleanup()
 
     def _initBoard(self):
@@ -156,14 +156,14 @@ class Chessboard:
         
         return positions
     
-    def getBestMove(self):
+    def getBestMove(self, _movetime=2000):
         self._engine.position(self.board)
-        move = self._engine.go(movetime=2000)
-        return move
+        move = self._engine.go(movetime=_movetime)
+        return move.bestmove
 
 if __name__ == '__main__':
     chessboard = Chessboard()
 
     while True:
-        print(chessboard.getBestMove())
+        print(chessboard.getBestMove(_movetime=2000))
         time.sleep(1)
