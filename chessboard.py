@@ -1,4 +1,5 @@
 import chess
+import chess.uci
 import time
 import RPi.GPIO as GPIO
 from mcp23017 import MCP23017
@@ -37,12 +38,16 @@ class Chessboard:
         self._rowGH = MCP23017(3) # Device address 3
         self._positions = [[1]*8]*8
 
+        # start stockfish engine
+        self._engine = chess.uci.popen_engine("stockfish")
+
         # register interrupt callback
         GPIO.add_event_detect(self._interrupt_pin, GPIO.FALLING, callback=self._onInterruptEvent, bouncetime=10)
         self._board_initialized = False # board has not yet been initialized
         self.readPositions() # clear interrupt
 
     def __del__(self):
+        self._engine.terminate()
         GPIO.cleanup()
 
     def _initBoard(self):
@@ -51,6 +56,7 @@ class Chessboard:
         self._squares = None
         self._board_initialized = True
         self.board = chess.Board()
+        self._engine.ucinewgame()
         self.setStatusLed(self._led_green,self.LED_ON)
         self.setStatusLed(self._led_yellow,self.LED_OFF)
         self.setStatusLed(self._led_red,self.LED_OFF)
@@ -83,30 +89,38 @@ class Chessboard:
                         elif action == self.ACTION_SET: # set action
                             if (type(self._pieces) is not list): # simple move
                                 print("Simple move: " + self._pieces.symbol() + " from " + chess.SQUARE_NAMES[self._squares] + " to " + chess.SQUARE_NAMES[square])
-                                self.board.set_piece_at(square,self._pieces)
-                                print(self.board)
-                                self.setStatusLed(self._led_yellow,self.LED_OFF)
                             elif (type(self._pieces) is list and len(self._pieces) == 2): # capture move
                                 # we assume that the captured piece was at the active square
                                 cap_square_id = self._squares.index(square) # get the index of the active square from last squares
                                 captured_piece = self._pieces[cap_square_id].symbol()
                                 del self._pieces[cap_square_id] # remove the captured piece
                                 del self._squares[cap_square_id] # remove the capture square from last squares
-                                survivor = self._pieces[0] # the remaining piece is the survivor
-                                from_square = self._squares[0] # the remaining square is the place where the survivor started from
-                                self.board.set_piece_at(square, survivor) # now set the piece
-                                print("Capture move: " + survivor.symbol() + " from " + chess.SQUARE_NAMES[from_square] + " to " + chess.SQUARE_NAMES[square] + " (" + captured_piece + " captured)")
-                                print(self.board)
-                                self.setStatusLed(self._led_yellow,self.LED_OFF)
+                                self._pieces = self._pieces[0] # the remaining piece is the survivor
+                                self._squares = self._squares[0] # the remaining square is the place where the survivor started from
+                                print("Capture move: " + self._pieces.symbol() + " from " + chess.SQUARE_NAMES[self._squares] + " to " + chess.SQUARE_NAMES[square] + " (" + captured_piece + " captured)")
                             else:
                                 print("Error: Lost synchronization!")
                                 self.setStatusLed(self._led_green,self.LED_OFF)
                                 self.setStatusLed(self._led_red,self.LED_ON)
+                                self._board_initialized = False
+                                return False
+                            # now set the piece
+                            self.board.set_piece_at(square, self._pieces)
+                            print(self.board)
+                            # update stats
+                            if self._pieces.color == chess.WHITE and self.board.turn == chess.WHITE:
+                                self.board.turn = chess.BLACK
+                            elif self._pieces.color == chess.BLACK and self.board.turn == chess.BLACK:
+                                self.board.turn = chess.WHITE
+                                self.board.fullmove_number += 1
+                            self.setStatusLed(self._led_yellow,self.LED_OFF)
                             
+                        # store last action
                         self._last_action = action
 
         # store position
         self._positions = new_pos
+        return True
 
     def setStatusLed(self,led,state):
         if state == self.LED_ON:
@@ -141,9 +155,15 @@ class Chessboard:
             self._positions = positions
         
         return positions
+    
+    def getBestMove(self):
+        self._engine.position(self.board)
+        move = self._engine.go(movetime=2000)
+        return move
 
 if __name__ == '__main__':
     chessboard = Chessboard()
 
     while True:
+        print(chessboard.getBestMove())
         time.sleep(1)
