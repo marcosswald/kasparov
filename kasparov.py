@@ -3,7 +3,7 @@ from flask_ask import Ask, statement, question, session
 from chessboard import Chessboard
 
 # create chess board
-# chessboard = Chessboard()
+chessboard = Chessboard()
 
 app = Flask(__name__)
 ask = Ask(app, '/kasparov')
@@ -14,7 +14,8 @@ def homepage():
 
 @ask.intent('BestMoveIntent')
 def best_move():
-    return statement("Kasparov says that you should move your king.")
+    best_move = chessboard.getBestMove(_movetime=2000)
+    return statement("Kasparoff says that you should move " + best_move)
 
 # main
 if __name__ == '__main__':

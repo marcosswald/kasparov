@@ -159,7 +159,8 @@ class Chessboard:
     def getBestMove(self, _movetime=2000):
         self._engine.position(self.board)
         move = self._engine.go(movetime=_movetime)
-        return move.bestmove
+        move_string = "from " + chess.SQUARE_NAMES[move.bestmove.from_square] + " to " + chess.SQUARE_NAMES[move.bestmove.to_square] 
+        return move_string
 
 if __name__ == '__main__':
     chessboard = Chessboard()
