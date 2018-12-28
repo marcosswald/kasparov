@@ -6,7 +6,7 @@ from chessboard import Chessboard
 # chessboard = Chessboard()
 
 app = Flask(__name__)
-ask = Ask(app, '/')
+ask = Ask(app, '/kasparov')
 
 @app.route('/')
 def homepage():
@@ -18,4 +18,4 @@ def best_move():
 
 # main
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0',ssl_context=('certificate/certificate.pem', 'certificate/private-key.pem'))
