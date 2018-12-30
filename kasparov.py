@@ -15,7 +15,7 @@ def homepage():
 @ask.intent('BestMoveIntent')
 def best_move():
     best_move = chessboard.getBestMove(_movetime=2000)
-    return statement("Kasparoff says that you should move " + best_move)
+    return statement("Kasparoff says that " + best_move)
 
 # main
 if __name__ == '__main__':

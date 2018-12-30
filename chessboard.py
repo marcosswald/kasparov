@@ -12,6 +12,13 @@ class Chessboard:
     ACTION_SET = 0
     ACTION_REMOVE = 1
 
+    # modes
+    ONE_PLAYER_MODE = 0
+    TWO_PLAYER_MODE = 1
+
+    # piece types
+    PIECE_NAMES = ["Piece", "Pawn", "Knight", "Bishop", "Rook", "Queen", "King"]
+
     def __init__(self):
         # Pin definition
         self._reset_pin = 27
@@ -19,6 +26,10 @@ class Chessboard:
         self._led_green = 14
         self._led_yellow = 15
         self._led_red = 18
+
+        # settings
+        self.mode = self.TWO_PLAYER_MODE
+        self._computer_color = chess.BLACK
 
         # Set GPIOs
         GPIO.setmode(GPIO.BCM) # set GPIO numbering
@@ -57,6 +68,8 @@ class Chessboard:
         self._board_initialized = True
         self.board = chess.Board()
         self._engine.ucinewgame()
+        self._info_handler = chess.uci.InfoHandler()
+        self._engine.info_handlers.append(self._info_handler)
         self.setStatusLed(self._led_green,self.LED_ON)
         self.setStatusLed(self._led_yellow,self.LED_OFF)
         self.setStatusLed(self._led_red,self.LED_OFF)
@@ -114,6 +127,10 @@ class Chessboard:
                                 self.board.turn = chess.WHITE
                                 self.board.fullmove_number += 1
                             self.setStatusLed(self._led_yellow,self.LED_OFF)
+                            # check if game is over
+                            if self.board.is_game_over():
+                                print("Game Over! Result " + self.board.result())
+                                self._board_initialized = False
                             
                         # store last action
                         self._last_action = action
@@ -157,14 +174,27 @@ class Chessboard:
         return positions
     
     def getBestMove(self, _movetime=2000):
-        self._engine.position(self.board)
-        move = self._engine.go(movetime=_movetime)
-        move_string = "from " + chess.SQUARE_NAMES[move.bestmove.from_square] + " to " + chess.SQUARE_NAMES[move.bestmove.to_square] 
-        return move_string
+        try:
+            self._engine.position(self.board)
+            move = self._engine.go(movetime=_movetime)
+            piece_type = self.board.piece_type_at(move.bestmove.from_square)
+            if piece_type is not None:
+                piece = self.PIECE_NAMES[piece_type]
+            else:
+                piece = "Piece"
+            move_string = "you should move your " + piece + " from " + chess.SQUARE_NAMES[move.bestmove.from_square] + " to " + chess.SQUARE_NAMES[move.bestmove.to_square] 
+            return move_string
+        except chess.engine.EngineTerminatedException:
+            return "an engine terminate exception occured"
+    
+    def getScore(self):
+        return self._info_handler.info["score"][1]
 
 if __name__ == '__main__':
     chessboard = Chessboard()
 
     while True:
-        print(chessboard.getBestMove(_movetime=2000))
+        if chessboard._board_initialized:
+            print(chessboard.getBestMove())
+            print(chessboard.getScore())
         time.sleep(1)
