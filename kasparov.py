@@ -18,20 +18,12 @@ def shutdown_server():
 def homepage():
     return "Hi there, kasparov is up and running"
 
-@ask.launch
-def start_skill():
-    return question('Do you want to start a new game of chess?')
-
-@ask.intent('YesIntent')
-def yes():
+@ask.intent('StartNewIntent')
+def start_new():
     global chessboard
     chessboard.__del__()
     chessboard = Chessboard()
-    return statement("Ok. Please put all pieces in their starting position.")
-
-@ask.intent('NoIntent')
-def no():
-    return statement("Ok.")
+    return statement("Ok, let's start a new game. Please put all pieces in their starting position.")
 
 @ask.intent('AMAZON.FallbackIntent')
 def fallback():
@@ -52,6 +44,8 @@ def get_turn():
             return statement("Kasparov says that {}".format(turn))
         else:
             return statement("Kasparov does not know who's turn it is.")
+    elif chessboard.isGameOver():
+        return statement("Kasparov says that the game is over. {}".format(chessboard.getWinnerText()))
     else:
         return statement("Kasparov was not following the game and says you should start a new one.")
 
@@ -63,6 +57,8 @@ def get_score():
             return statement("Kasparov thinks that {}".format(score))
         else:
             return statement("Kasparov does not know how to interpret the current situation.")
+    elif chessboard.isGameOver():
+        return statement("Kasparov says that the game is over. {}".format(chessboard.getWinnerText()))
     else:
         return statement("Kasparov was not following the game and says you should start a new one.")
 
@@ -74,6 +70,8 @@ def best_move():
             return statement("Kasparov says that you should {}".format(best_move))
         else:
             return statement("Kasparov does not know what to do.")
+    elif chessboard.isGameOver():
+        return statement("Kasparov says that the game is over. {}".format(chessboard.getWinnerText()))
     else:
         return statement("Kasparov lost track of your game and says you should start a new one.")
 

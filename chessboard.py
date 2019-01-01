@@ -59,7 +59,6 @@ class Chessboard:
         self.readPositions() # clear interrupt
 
     def __del__(self):
-        self._engine.quit()
         print("cleaning up...")
         GPIO.cleanup()
 
@@ -68,6 +67,7 @@ class Chessboard:
         self._pieces = []
         self._squares = []
         self._board_initialized = True
+        self._game_is_over = False
         self.board = chess.Board()
         self._engine.ucinewgame()
         self._info_handler = chess.uci.InfoHandler()
@@ -135,6 +135,7 @@ class Chessboard:
                             if self.board.is_game_over():
                                 print("Game Over! Result " + self.board.result())
                                 self._board_initialized = False
+                                self._game_is_over = True
                             
                         # store last action
                         self._last_action = action
@@ -186,6 +187,15 @@ class Chessboard:
 
     def isReady(self):
         return self._board_initialized
+    
+    def isGameOver(self):
+        return self._game_is_over
+
+    def getWinnerText(self):
+        if self.board.result() == "1/2-1/2":
+            return "It is a draw."
+        winner = "white" if self.board.result() == "1-0" else "black"
+        return "{} has won.".format(winner)
     
     def getBestMove(self, _movetime):
         try:
