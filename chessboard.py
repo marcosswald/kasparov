@@ -1,6 +1,7 @@
 import chess
 import chess.uci
 import time
+import copy
 import RPi.GPIO as GPIO
 from mcp23017 import MCP23017
 
@@ -59,12 +60,13 @@ class Chessboard:
 
     def __del__(self):
         self._engine.quit()
+        print("cleaning up...")
         GPIO.cleanup()
 
     def _initBoard(self):
         self._last_action = self.ACTION_SET
-        self._pieces = None
-        self._squares = None
+        self._pieces = []
+        self._squares = []
         self._board_initialized = True
         self.board = chess.Board()
         self._engine.ucinewgame()
@@ -94,36 +96,38 @@ class Chessboard:
                         if action == self.ACTION_REMOVE: # remove action
                             piece = self.board.remove_piece_at(square) # remove the piece
                             if self._last_action == self.ACTION_REMOVE:
-                                self._pieces = [piece, self._pieces]
-                                self._squares = [square, self._squares]
+                                if (len(self._pieces) > 1) or (self._pieces[0].color == piece.color):
+                                    self._lostSync()
+                                    return False 
+                                self._pieces.append(piece)
+                                self._squares.append(square)
                             else:
-                                self._pieces = piece
-                                self._squares = square  
+                                self._pieces = [piece]
+                                self._squares = [square]
                         elif action == self.ACTION_SET: # set action
-                            if (type(self._pieces) is not list): # simple move
-                                print("Simple move: " + self._pieces.symbol() + " from " + chess.SQUARE_NAMES[self._squares] + " to " + chess.SQUARE_NAMES[square])
-                            elif (type(self._pieces) is list and len(self._pieces) == 2): # capture move
+                            if len(self._pieces) == 1: # simple move
+                                print("Simple move: " + self._pieces[0].symbol() + " from " + chess.SQUARE_NAMES[self._squares[0]] + " to " + chess.SQUARE_NAMES[square])
+                            elif len(self._pieces) == 2: # capture move
                                 # we assume that the captured piece was at the active square
-                                cap_square_id = self._squares.index(square) # get the index of the active square from last squares
-                                captured_piece = self._pieces[cap_square_id].symbol()
-                                del self._pieces[cap_square_id] # remove the captured piece
-                                del self._squares[cap_square_id] # remove the capture square from last squares
-                                self._pieces = self._pieces[0] # the remaining piece is the survivor
-                                self._squares = self._squares[0] # the remaining square is the place where the survivor started from
-                                print("Capture move: " + self._pieces.symbol() + " from " + chess.SQUARE_NAMES[self._squares] + " to " + chess.SQUARE_NAMES[square] + " (" + captured_piece + " captured)")
+                                try:
+                                    cap_square_id = self._squares.index(square) # get the index of the active square from last squares
+                                    captured_piece = self._pieces[cap_square_id].symbol()
+                                    del self._pieces[cap_square_id] # remove the captured piece
+                                    del self._squares[cap_square_id] # remove the capture square from last squares
+                                    print("Capture move: " + self._pieces[0].symbol() + " from " + chess.SQUARE_NAMES[self._squares[0]] + " to " + chess.SQUARE_NAMES[square] + " (" + captured_piece + " captured)")
+                                except:
+                                    self._lostSync()
+                                    return False 
                             else:
-                                print("Error: Lost synchronization!")
-                                self.setStatusLed(self._led_green,self.LED_OFF)
-                                self.setStatusLed(self._led_red,self.LED_ON)
-                                self._board_initialized = False
+                                self._lostSync()
                                 return False
                             # now set the piece
-                            self.board.set_piece_at(square, self._pieces)
+                            self.board.set_piece_at(square, self._pieces[0])
                             print(self.board)
                             # update stats
-                            if self._pieces.color == chess.WHITE and self.board.turn == chess.WHITE:
+                            if self._pieces[0].color == chess.WHITE and self.board.turn == chess.WHITE:
                                 self.board.turn = chess.BLACK
-                            elif self._pieces.color == chess.BLACK and self.board.turn == chess.BLACK:
+                            elif self._pieces[0].color == chess.BLACK and self.board.turn == chess.BLACK:
                                 self.board.turn = chess.WHITE
                                 self.board.fullmove_number += 1
                             self.setStatusLed(self._led_yellow,self.LED_OFF)
@@ -138,6 +142,13 @@ class Chessboard:
         # store position
         self._positions = new_pos
         return True
+
+    def _lostSync(self):
+        print("Error: Lost synchronization!")
+        self.setStatusLed(self._led_green,self.LED_OFF)
+        self.setStatusLed(self._led_yellow,self.LED_OFF)
+        self.setStatusLed(self._led_red,self.LED_ON)
+        self._board_initialized = False
 
     def setStatusLed(self,led,state):
         if state == self.LED_ON:
@@ -172,29 +183,66 @@ class Chessboard:
             self._positions = positions
         
         return positions
+
+    def isReady(self):
+        return self._board_initialized
     
-    def getBestMove(self, _movetime=2000):
+    def getBestMove(self, _movetime):
         try:
             self._engine.position(self.board)
             move = self._engine.go(movetime=_movetime)
-            piece_type = self.board.piece_type_at(move.bestmove.from_square)
-            if piece_type is not None:
-                piece = self.PIECE_NAMES[piece_type]
-            else:
-                piece = "Piece"
-            move_string = "you should move your " + piece + " from " + chess.SQUARE_NAMES[move.bestmove.from_square] + " to " + chess.SQUARE_NAMES[move.bestmove.to_square] 
-            return move_string
+            return move
         except chess.engine.EngineTerminatedException:
-            return "an engine terminate exception occured"
+            print("An engine terminate exception occured!")
+            return None
+    
+    def getBestMoveText(self, _movetime=2000):
+        move = self.getBestMove(_movetime)
+        if move is None:
+            return None
+        piece_type = self.board.piece_type_at(move.bestmove.from_square)
+        if piece_type is not None:
+            piece = self.PIECE_NAMES[piece_type]
+        else:
+            piece = "Piece"
+        move_string = "move your " + piece + " from " + chess.SQUARE_NAMES[move.bestmove.from_square] + " to " + chess.SQUARE_NAMES[move.bestmove.to_square] 
+        return move_string
     
     def getScore(self):
-        return self._info_handler.info["score"][1]
+        try:
+            movetime = 1000
+            self._engine.position(self.board)
+            self._engine.go(movetime=movetime)
+            score = self._info_handler.info["score"][1]
+            return score
+        except chess.engine.EngineTerminatedException:
+            print("An engine terminate exception occured!")
+            return None
+
+    def getScoreText(self):
+        score = self.getScore()
+        if score is None:
+            return None  
+        if score.mate is not None:
+            color = "black" if (self.board.turn == chess.WHITE and score.mate > 0) or (self.board.turn == chess.BLACK and score.mate < 0) else "white"
+            score_string = color + " can be mated in {}".format(abs(score.mate)) + " moves"
+        else:
+            color = "white" if self.board.turn == chess.WHITE else "black"
+            pos = "ahead" if score.cp > 0 else "behind"
+            score_string = color + " is {:.1f}".format(abs(score.cp)/100) + " points " + pos
+        return score_string
+
+    def getTurnText(self):
+        color = "white" if self.board.turn == chess.WHITE else "black"
+        return "it is {}'s turn.".format(color)
 
 if __name__ == '__main__':
     chessboard = Chessboard()
 
     while True:
-        if chessboard._board_initialized:
-            print(chessboard.getBestMove())
-            print(chessboard.getScore())
+        input("Press key to continue...")
+        if chessboard.isReady():
+            #print(chessboard.getBestMove(2000))
+            print(chessboard.getScoreText())
+            #print(chessboard.getTurnText())
         time.sleep(1)
